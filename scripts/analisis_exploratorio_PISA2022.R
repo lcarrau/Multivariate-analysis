@@ -16,6 +16,7 @@ library(tidyverse)
 library(janitor)
 library(labelled)
 library(skimr)
+library(purrr)
 
 unzip(
   zipfile = "data/FLT_SPSS.zip",
@@ -187,6 +188,7 @@ base %>%
   ) %>%
   arrange(desc(promedio_flit))
 
+
 # Correlaciones
 # Tomando las variables numéricas:
 
@@ -304,3 +306,56 @@ scores <- cbind(
 summary(pca)
 
 round(pca$rotation, 3)
+
+
+
+
+
+
+
+
+
+# Últimos detalles:
+base_fin <- qqq %>%
+  select(
+    CNT,
+    CNTSTUID,
+    ST004D01T,
+    ESCS,
+    PAREDINT,
+    PV1FLIT,
+    FLSCHOOL,
+    FLMULTSB,
+    FLFAMILY,
+    FLCONFIN,
+    FLCONICT,
+    FRINFLFM
+  )
+
+# Conservar datos de América Latina
+
+base_latam <-  base_fin %>%
+  filter(
+    CNT %in% c(
+      "BRA",
+      "CRI",
+      "PER"
+    )
+  )
+
+# ==========================================================
+# 30. GUARDAR LA BASE REDUCIDA
+# EN FORMATO CSV
+# ==========================================================
+
+write.csv(
+  base_latam,
+  file.path(
+    ruta_proyecto,
+    "data/base_pisa_latam_red.csv"
+  ),
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
+
+

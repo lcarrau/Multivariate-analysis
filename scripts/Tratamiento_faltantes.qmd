@@ -1,0 +1,96 @@
+---
+title: "Tratamiento_faltantes"
+subtitle: "Tratamiento previo al Análisis de Componentes Principales"
+author: "Laura"
+date: today
+format:
+  pdf:
+    toc: false
+    number-sections: true
+    documentclass: article
+    geometry: margin=2.5cm
+lang: es
+---
+
+## Contexto
+
+Se evaluó la presencia de valores faltantes (NA) en las nueve variables numéricas seleccionadas para el Análisis de Componentes Principales (PCA), previo a la imputación y estandarización de los datos.
+
+```{r}
+#| label: setup
+#| echo: false
+#| message: false
+#| warning: false
+
+vars_pca <- read.csv(
+  file.path(
+    "C:/Análisis multivariado/Trabajo final/Multivariate-analysis/data",
+    "vars_pca.csv"
+  ),
+  fileEncoding = "UTF-8"
+)
+```
+
+
+## Proporción de NAs por variable
+
+```{r}
+#| echo: false
+#| message: false
+library(dplyr)
+library(knitr)
+
+tabla_na <- tibble::tibble(
+  Variable = c("ef_mult_asig", "educ_padres", "i_soc_econ", "ef_conf_tecno",
+               "ef_amigos", "ef_confianza", "ef_familia", "ef_escuela", "PV1FLIT"),
+  `Proporción de NA (%)` = c(28.8, 26.4, 26.1, 20.4, 19.8, 19.2, 16.0, 14.6, 0.0)
+)
+
+kable(tabla_na)
+```
+
+## Patrón de faltantes
+
+El análisis mediante gráfico UpSet (`gg_miss_upset`) reveló que los valores faltantes **no se distribuyen de forma independiente entre variables**, sino que tienden a **ausentarse en conjunto**. La combinación más frecuente (2.449 casos) corresponde a la ausencia simultánea de las cinco variables `ef_amigos`, `ef_conf_tecno`, `i_soc_econ`, `educ_padres` y `ef_mult_asig`. Las siguientes combinaciones más frecuentes (1.440 y 1.235 casos) también involucran múltiples variables faltando en simultáneo.
+
+Este patrón es consistente con el diseño matricial rotado típico de los cuestionarios PISA, donde no todos los estudiantes responden todos los módulos del cuestionario, generando así un patrón de no-respuesta **sistemático y agrupado**, en lugar de completamente aleatorio (no MCAR — *Missing Completely At Random*).
+
+**Nota:** 
+Si trabajás con el gráfico UpSet real, podés insertarlo como imagen en lugar de solo describirlo:
+
+```{r}
+#| eval: true
+#| fig-cap: "Combinaciones de valores faltantes por variable (UpSet plot)"
+library(naniar)
+gg_miss_upset(vars_pca)
+```
+:::
+
+## Evaluación de estrategias de tratamiento
+
+**a) Eliminación por lista (*listwise deletion*):** descartada. Considerando la superposición de las combinaciones de NAs observadas en el gráfico UpSet, esta estrategia implicaría la pérdida de más del 50 % de las observaciones de la base (aproximadamente 7.400 de 13.848 filas), comprometiendo severamente la representatividad de la muestra.
+
+**b) Imputación simple (media o mediana):** descartada. Con proporciones de NA entre 14.6 % y 28.8 %, la imputación por un valor central artificialmente reduce la varianza de las variables afectadas, distorsionando la matriz de correlaciones sobre la cual se construye el PCA — afectando directamente la validez de las cargas factoriales y la proporción de varianza explicada por cada componente.
+
+**c) Imputación multivariada (paquete `missMDA`):** **estrategia recomendada.** Este método estima los valores faltantes aprovechando la estructura de correlación entre las variables, mediante un algoritmo de PCA iterativo regularizado, preservando mejor la varianza y covarianza original de los datos que los métodos de imputación univariados.
+
+## Recomendación e implementación
+
+```{r}
+#| message: false
+library(missMDA)
+
+# Estimar el número óptimo de componentes para la imputación
+ncomp <- estim_ncpPCA(vars_pca, ncp.max = 5, method.cv = "Kfold")
+
+# Imputar valores faltantes
+imputado <- imputePCA(vars_pca, ncp = ncomp$ncp)
+vars_pca_imp <- as.data.frame(imputado$completeObs)
+
+# Verificación
+sapply(vars_pca_imp, function(x) sum(is.na(x)))
+```
+
+## Limitación metodológica
+
+Dado que el patrón de valores faltantes parece estar asociado al diseño de rotación de cuestionarios de PISA y no a un mecanismo completamente aleatorio, la imputación mediante `missMDA` —que asume cierta estructura de correlación recuperable a partir de las variables observadas— debe interpretarse como una aproximación razonable pero no exenta de supuestos. Esto se documenta como limitación metodológica del análisis.
